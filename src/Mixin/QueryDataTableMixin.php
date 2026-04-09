@@ -7,6 +7,7 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use StarterSolutions\InertiaDataTable\Pagination\SortablePaginator;
+use StarterSolutions\InertiaDataTable\Sorting\Sorter;
 
 /**
  * @method \StarterSolutions\InertiaDataTable\Pagination\SortablePaginator dataTable(string $tableKey, int|null|\Closure $perPage = null, array|string  $columns = ['*'], string|null  $pageName = null, int|null  $page = null, \Closure|int|null  $total = null, string|null  $sortBy = null, bool|null  $descending = null, \Closure|null  $filterUsing = null)
@@ -69,7 +70,30 @@ class QueryDataTableMixin
             $sortBy = $sortBy ?? $session['sortBy'] ?? Request::query($config['sort_by_param'],   $config['default_sort_by']);
             $descending = $descending ?? $session['descending'] ?? Request::boolean($config['descending_param'], false);
             $direction = $descending ? 'desc' : 'asc';
-            $this->applySorting($query, $sortBy, $direction);
+
+            $sort = Sorter::make()
+                ->resolve($query, $sortBy, $direction);
+
+            if(empty($sort->relationChain)) {
+                $query->orderBy($sort->column, $sort->direction);
+            } else {
+                $model = $query->getModel();
+
+                $relationName = last($sort->relationChain);
+                $relation = $model->{$relationName}();
+
+                $baseTable = $sort->baseTable;
+                $relatedModel = $sort->relatedModel;
+                $relatedTable = $sort->relatedTable;
+
+                $query->orderBy(
+                    $relatedModel->newQuery()
+                        ->select($sort->column)
+                        ->from($relatedTable)
+                        ->whereColumn("{$relatedTable}.{$relation->getQualifiedRelatedKeyName()}", "{$baseTable}.{$relation->getQualifiedParentKeyName()}")
+                        ->limit(1),
+                )
+            }
 
             // determine pagination parameters
             $pageName = $pageName ?? $config['page_name_param'];
@@ -103,10 +127,5 @@ class QueryDataTableMixin
                 ]
             );
         };
-    }
-
-    private function applySorting($query, string $sortBy, string $direction): void
-    {
-        $query->orderBy($sortBy, $direction);
     }
 }
