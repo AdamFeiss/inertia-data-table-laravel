@@ -70,7 +70,7 @@ class EloquentDataTableMixin
             $sortBy     = $sortBy     ?? $session['sortBy'] ?? Request::query($config['sort_by_param'],   $config['default_sort_by']);
             $descending = $descending ?? $session['descending'] ?? Request::boolean($config['descending_param'], false);
             $direction  = $descending ? 'desc' : 'asc';
-            $query->orderBy($sortBy, $direction);
+            $this->applySorting($query, $sortBy, $direction);
 
             // determine pagination parameters
             $pageName   ??= $config['page_name_param'];
@@ -104,5 +104,10 @@ class EloquentDataTableMixin
                 ]
             );
         };
+    }
+
+    private function applySorting($query, string $sortBy, string $direction): void
+    {
+        $query->orderBy($sortBy, $direction);
     }
 }
